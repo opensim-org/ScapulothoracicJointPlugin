@@ -49,10 +49,7 @@ public:
 //=============================================================================
 // PROPERTIES
 //=============================================================================
-    /** @name Property declarations 
-    The serializable properties associated with a ScapulothoracicJoint.
-    /**@{**/
-    OpenSim_DECLARE_PROPERTY(thoracic_ellipsoid_radii_x_y_z, SimTK::Vec3, 
+    OpenSim_DECLARE_PROPERTY(thoracic_ellipsoid_radii_x_y_z, SimTK::Vec3,
         "Radii of the thoracic surface ellipsoid a Vec3(rX, rY, rZ).");
 
     OpenSim_DECLARE_LIST_PROPERTY_SIZE(scapula_winging_axis_origin, double, 2,
@@ -61,7 +58,6 @@ public:
 
     OpenSim_DECLARE_PROPERTY(scapula_winging_axis_direction, double, 
         "Winging axis orientation (in radians) in the scapula plane.");
-    /**@}**/
     /** Indices of Coordinates for use as arguments to getCoordinate() and
     updCoordinate().
 
