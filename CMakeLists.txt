@@ -26,4 +26,4 @@ set_target_properties(
     DEFINE_SYMBOL OSIMPLUGIN_EXPORTS
     PROJECT_LABEL "Libraries - ${PLUGIN_NAME}")
 
-install_targets(/plugins RUNTIME_DIRECTORY /plugins  ${PLUGIN_NAME})
+install(TARGETS ${PLUGIN_NAME} DESTINATION plugins)
