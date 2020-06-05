@@ -25,7 +25,7 @@
 // INCLUDES
 //=============================================================================
 #include "ScapulothoracicJoint.h"
-#include <OpenSim/Simulation/Model/Model.h>
+#include "simbody/internal/SimbodyMatterSubsystem.h"
 #include "simbody/internal/MobilizedBody_Ellipsoid.h"
 #include "simbody/internal/MobilizedBody_Pin.h"
 #include "simbody/internal/MobilizedBody_Weld.h"
