@@ -1,63 +1,29 @@
-Project(ScapulothoracicJoint)
+project(ScapulothoracicJointPlugin40)
 
-cmake_minimum_required(VERSION 2.6)
-if(COMMAND cmake_policy)
-        cmake_policy(SET CMP0003 NEW)
-        cmake_policy(SET CMP0005 NEW)
-endif(COMMAND cmake_policy)
+cmake_minimum_required(VERSION 3.2)
 
-SET(KIT plugin)
-SET(UKIT PLUGIN)
+file(GLOB SOURCE_FILES *.cpp)
+file(GLOB INCLUDE_FILES *.h)
 
-SET(NameSpace "OpenSim_")
-### SET(NameSpace "")
+set(OPENSIM_INSTALL_DIR $ENV{OPENSIM_HOME}
+    CACHE PATH "Top-level directory of OpenSim install")
 
-FILE(GLOB SOURCE_FILES *.cpp)
-FILE(GLOB INCLUDE_FILES *.h)
+set(PLUGIN_NAME "ScapulothoracicJointPlugin40"
+    CACHE STRING "Name of shared library to create")
 
-SET(EXPORT_MACRO OSIM${UKIT}_EXPORTS)
+# OpenSim uses C++11 language features.
+set(CMAKE_CXX_STANDARD 11)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-SET(OPENSIM_INSTALL_DIR "C:/OpenSim2.3.2/" CACHE PATH "Top-level directory of OpenSim install")
+find_package(OpenSim REQUIRED PATHS "${OPENSIM_INSTALL_DIR}")
 
-SET(PLUGIN_NAME "osimPlugin" CACHE STRING "Name of shared library to create")
+add_library(${PLUGIN_NAME} SHARED ${SOURCE_FILES} ${INCLUDE_FILES})
 
-### HEADERS
-SET(OPENSIM_HEADERS_DIR ${OPENSIM_INSTALL_DIR}/sdk/include)
-SET(XERCES_HEADER_DIR ${OPENSIM_INSTALL_DIR}/sdk/include/xercesc)
-SET(SIMTK_HEADERS_DIR ${OPENSIM_INSTALL_DIR}/sdk/include/SimTK/include)
+target_link_libraries(${PLUGIN_NAME} ${OpenSim_LIBRARIES})
 
-INCLUDE_DIRECTORIES(${OPENSIM_HEADERS_DIR} ${SIMTK_HEADERS_DIR})
+set_target_properties(
+    ${PLUGIN_NAME} PROPERTIES
+    DEFINE_SYMBOL OSIMPLUGIN_EXPORTS
+    PROJECT_LABEL "Libraries - ${PLUGIN_NAME}")
 
-### LIBRARIES
-SET(OPENSIM_LIBS_DIR  ${OPENSIM_INSTALL_DIR}/sdk/lib)
-LINK_DIRECTORIES(${OPENSIM_LIBS_DIR})
-
-# SimmKinematicsEngine library only needed for SimmFileWriter...
-LINK_LIBRARIES(
-	debug osimCommon_d optimized osimCommon
-	debug osimSimulation_d optimized osimSimulation
-	debug osimAnalyses_d optimized osimAnalyses
-	debug osimActuators_d optimized osimActuators
-	debug osimTools_d optimized osimTools
-	debug  ${NameSpace}SimTKcommon${CMAKE_DEBUG_POSTFIX} optimized   ${NameSpace}SimTKcommon
-	debug  ${NameSpace}SimTKmath${CMAKE_DEBUG_POSTFIX} optimized  ${NameSpace}SimTKmath
-	debug ${NameSpace}SimTKsimbody${CMAKE_DEBUG_POSTFIX} optimized  ${NameSpace}SimTKsimbody
-)
-
-ADD_LIBRARY(${PLUGIN_NAME} SHARED ${SOURCE_FILES} ${INCLUDE_FILES}) 
-
-IF(CMAKE_INSTALL_PREFIX_INITIALIZED_TO_DEFAULT)
-	SET(CMAKE_INSTALL_PREFIX ${OPENSIM_INSTALL_DIR}/ CACHE PATH "Install path prefix." FORCE)
-ENDIF(CMAKE_INSTALL_PREFIX_INITIALIZED_TO_DEFAULT)
-
-## MARK_AS_ADVANCED(CMAKE_INSTALL_PREFIX)
-MARK_AS_ADVANCED(EXECUTABLE_OUTPUT_PATH)
-MARK_AS_ADVANCED(LIBRARY_OUTPUT_PATH)
-
-SET_TARGET_PROPERTIES(
-	${PLUGIN_NAME} PROPERTIES
-	DEFINE_SYMBOL ${EXPORT_MACRO}
-	PROJECT_LABEL "Libraries - ${PLUGIN_NAME}")
-
-INSTALL_TARGETS(/plugins RUNTIME_DIRECTORY /plugins  ${PLUGIN_NAME})
-
+install(TARGETS ${PLUGIN_NAME} DESTINATION plugins)

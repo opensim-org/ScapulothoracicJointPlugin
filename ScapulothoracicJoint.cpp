@@ -24,10 +24,11 @@
 //=============================================================================
 // INCLUDES
 //=============================================================================
-#include <OpenSim/Simulation/Model/Model.h>
-#include <OpenSim/Simulation/Model/BodySet.h>
 #include "ScapulothoracicJoint.h"
-
+#include "simbody/internal/SimbodyMatterSubsystem.h"
+#include "simbody/internal/MobilizedBody_Ellipsoid.h"
+#include "simbody/internal/MobilizedBody_Pin.h"
+#include "simbody/internal/MobilizedBody_Weld.h"
 //=============================================================================
 // STATICS
 //=============================================================================
@@ -42,30 +43,48 @@ using namespace OpenSim;
 /*
 * Default constructor.
 */
-ScapulothoracicJoint::ScapulothoracicJoint() : Joint()
+ScapulothoracicJoint::ScapulothoracicJoint() : Super()
 {
-    constructCoordinates();
     constructProperties();
 }
 
-
 //_____________________________________________________________________________
-/**
+/*
  * Convenience Constructor.
  */
-ScapulothoracicJoint::ScapulothoracicJoint(const std::string &name, OpenSim::Body& parent, SimTK::Vec3 locationInParent, SimTK::Vec3 orientationInParent,
-                OpenSim::Body& body, SimTK::Vec3 locationInBody, SimTK::Vec3 orientationInBody,
-                SimTK::Vec3 ellipsoidRadii, SimTK::Vec2 wingingOrigin, double wingingDirection, bool reverse) :
-    Joint(name, parent, locationInParent,orientationInParent, body, locationInBody, orientationInBody, reverse)
+ScapulothoracicJoint::ScapulothoracicJoint(const std::string& name,
+    const PhysicalFrame& parent,
+    const PhysicalFrame& child,
+    const SimTK::Vec3& ellipsoidRadii,
+    SimTK::Vec2 wingingOrigin,
+    double wingingDirection) : Super(name, parent, child)
 {
-    constructCoordinates();
     constructProperties();
-
     upd_thoracic_ellipsoid_radii_x_y_z() = ellipsoidRadii;
     upd_scapula_winging_axis_origin(0) = wingingOrigin[0];
     upd_scapula_winging_axis_origin(1) = wingingOrigin[1];
     upd_scapula_winging_axis_direction() = wingingDirection;
-    updBody().setJoint(*this);
+}
+
+/** Convenience constructor */
+ScapulothoracicJoint::ScapulothoracicJoint(const std::string& name,
+    const PhysicalFrame& parent,
+    const SimTK::Vec3& locationInParent,
+    const SimTK::Vec3& orientationInParent,
+    const PhysicalFrame& child,
+    const SimTK::Vec3& locationInChild,
+    const SimTK::Vec3& orientationInChild,
+    const SimTK::Vec3& ellipsoidRadii,
+    SimTK::Vec2 wingingOrigin,
+    double wingingDirection) : 
+        Super(name, parent, locationInParent, orientationInParent,
+            child, locationInChild, orientationInChild)
+{
+    constructProperties();
+    upd_thoracic_ellipsoid_radii_x_y_z() = ellipsoidRadii;
+    upd_scapula_winging_axis_origin(0) = wingingOrigin[0];
+    upd_scapula_winging_axis_origin(1) = wingingOrigin[1];
+    upd_scapula_winging_axis_direction() = wingingDirection;
 }
 
 //=============================================================================
@@ -89,57 +108,6 @@ void ScapulothoracicJoint::constructProperties()
 }
 
 
-
-//_____________________________________________________________________________
-/**
-* Perform some set up functions that happen after the
-* object has been deserialized or copied.
-*
-* @param model containing this ScapulothoracicJoint.
-*/
-void ScapulothoracicJoint::connectToModel(Model& model)
-{
-    // COORDINATE SET
-    CoordinateSet& coords = upd_CoordinateSet();
-
-    // Some initializations
-    int nq = coords.getSize();  
-
-    // Note- should check that all coordinates are used.
-    if( nq > _numMobilities){
-        cout << "ScapulothoracicJoint::Too many coordinates specified."<< endl;
-        for(int i = nq-1; i >= _numMobilities; --i){
-            cout << "ScapulothoracicJoint:: removing coordinate: "<< coords[i].getName() << endl;
-            coords.remove(i);
-        }
-    }
-
-    Array<string> axisNames;
-    axisNames.append("abduction");
-    axisNames.append("elevation");
-    axisNames.append("upward-rot");
-    axisNames.append("internal-rot");
-
-    while(nq < _numMobilities){
-        Coordinate *coord = new Coordinate;
-        string name = getName() + "_" + axisNames[nq];
-        coord->setName(name);
-        coord->setMotionType(Coordinate::Rotational);
-        coord->setRangeMin(-SimTK::Pi/2);
-        coord->setRangeMax(SimTK::Pi/2);
-
-        cout << "ScapulothoracicJoint::Insufficient number of coordinates, adding coordinate: " << name << "."<< endl;
-        coords.adoptAndAppend(coord);
-        nq++;
-    }
-
-    // Base class checks that parent is valid
-    Super::connectToModel(model);
-}
-
-
-
-
 //=============================================================================
 // SCALING
 //=============================================================================
@@ -150,19 +118,20 @@ void ScapulothoracicJoint::connectToModel(Model& model)
 * @param aScaleSet Set of XYZ scale factors for the bodies.
 * @todo Need to scale transforms appropriately, given an arbitrary axis.
 */
-void ScapulothoracicJoint::scale(const ScaleSet& aScaleSet)
+void ScapulothoracicJoint::extendScale(const SimTK::State& s,
+                                       const ScaleSet& scaleSet)
 {
     Vec3 scaleFactors(1.0);
 
     // Joint knows how to scale locations of the joint in parent and on the body
-    Joint::scale(aScaleSet);
+    Super::extendScale(s, scaleSet);
 
     // SCALING TO DO WITH THE PARENT BODY -----
     // Joint kinematics are scaled by the scale factors for the
     // parent body, so get those body's factors
-    const string& parentName = getParentBody().getName();
-    for (int i=0; i<aScaleSet.getSize(); i++) {
-        const Scale &scale = aScaleSet.get(i);
+    const string& parentName = getParentFrame().getName();
+    for (int i=0; i<scaleSet.getSize(); i++) {
+        const Scale &scale = scaleSet.get(i);
         if (scale.getSegmentName()==parentName) {
             scale.getScaleFactors(scaleFactors);
             break;
@@ -179,30 +148,32 @@ void ScapulothoracicJoint::scale(const ScaleSet& aScaleSet)
 // Simbody Model building.
 //=============================================================================
 //_____________________________________________________________________________
-void ScapulothoracicJoint::addToSystem(SimTK::MultibodySystem& system) const
+void ScapulothoracicJoint::extendAddToSystem(SimTK::MultibodySystem& system) const
 {
-    const SimTK::Vec3& orientation = get_orientation();
-    const SimTK::Vec3& location = get_location();
-    const SimTK::Vec3& orientationInParent = get_orientation_in_parent();
-    const SimTK::Vec3& locationInParent = get_location_in_parent();
-    
-    // Transform for ellipsoid joint frame in intermediate Scapula massless body frame
-    // such that intermediate frame is aligned with scapula joint frame with respect
-    // to the scapula body frame as  user specified by _location and _orientation 
+    Super::extendAddToSystem(system);
+    // Transform for ellipsoid joint frame in intermediate Scapula massless
+    // body frame such that intermediate frame is aligned with scapula joint
+    // frame with respect to the scapula body frame as  user specified by 
+    // _location and _orientation 
     //Rotation rotation(BodyRotationSequence, _orientation[0],XAxis, _orientation[1],YAxis, 
     //	_orientation[2]+SimTK::Pi/2, ZAxis);
     //SimTK::Transform ellipsoidJointFrameInIntermediate(rotation, _location);
     Rotation rotation(BodyRotationSequence, 0,XAxis, 0,YAxis, Pi/2, ZAxis);
     SimTK::Transform ellipsoidJointFrameInIntermediate(rotation, Vec3(0.0));
 
+    const SimTK::Transform& parentTransform =
+        getParentFrame().findTransformInBaseFrame();
     // Transform for Ellipsoid in parent body (Thorax)
     // Note: Ellipsoid rotated Pi/2 w.r.t. parent (i.e. Thorax) so that abduction and elevation are positive
-    Rotation parentRotation(BodyRotationSequence, orientationInParent[0], XAxis, 
-        orientationInParent[1], YAxis, orientationInParent[2]+SimTK::Pi/2, ZAxis);
-    SimTK::Transform ellipsoidJointFrameInThorax(parentRotation, locationInParent);
+    const Vec3 orientationInParent =
+        parentTransform.R().convertRotationToBodyFixedXYZ();
+    Rotation parentRotation(BodyRotationSequence,
+        orientationInParent[0], XAxis, 
+        orientationInParent[1], YAxis, 
+        orientationInParent[2]+SimTK::Pi/2, ZAxis);
 
-    // Workaround for new API with const functions
-    ScapulothoracicJoint* mutableThis = const_cast<ScapulothoracicJoint*>(this);
+    SimTK::Transform ellipsoidJointFrameInThorax(parentRotation,
+        parentTransform.p());
     
     // CREATE MOBILIZED BODY
     // Ellipsoid is rotated Pi/2 for desired rotations, but user's still wants to define Ellipsoid shape w.r.t thorax
@@ -210,11 +181,16 @@ void ScapulothoracicJoint::addToSystem(SimTK::MultibodySystem& system) const
     Vec3 ellipsoidRadii(get_thoracic_ellipsoid_radii_x_y_z()[1], 
         get_thoracic_ellipsoid_radii_x_y_z()[0], 
         get_thoracic_ellipsoid_radii_x_y_z()[2]);
-    MobilizedBody::Ellipsoid
-        simtkMasslessBody(mutableThis->updModel().updMatterSubsystem().updMobilizedBody(getParentBody().getIndex()),
+
+    int coordinateIndexForMobility = 0;
+
+    MobilizedBody::Ellipsoid simtkMasslessBody1 =
+        createMobilizedBody<MobilizedBody::Ellipsoid>(
+        system.updMatterSubsystem().updMobilizedBody(getParentFrame().getMobilizedBodyIndex()),
         ellipsoidJointFrameInThorax, SimTK::Body::Massless(), 
-        ellipsoidJointFrameInIntermediate, 
-        ellipsoidRadii);
+        ellipsoidJointFrameInIntermediate,
+        coordinateIndexForMobility);
+    simtkMasslessBody1.setDefaultRadii(ellipsoidRadii);
 
     // get unit vector version of direction in the scapula joint frame of the Ellipsoid 
     // where the joint Z-axis is normal to the ellipsoid surface, X-axis is in the 
@@ -237,42 +213,21 @@ void ScapulothoracicJoint::addToSystem(SimTK::MultibodySystem& system) const
         wingOrientationInIntermediateFrame, 
         wingOriginInIntermediateFrame);
 
-    MobilizedBody::Pin simtkBody(simtkMasslessBody, 
+    MobilizedBody::Pin simtkMasslessBody2 =
+        createMobilizedBody<MobilizedBody::Pin>(simtkMasslessBody1,
         wingingInIntermediateFrame, SimTK::Body::Massless(), 
-        wingingInIntermediateFrame);
+        wingingInIntermediateFrame, coordinateIndexForMobility);
 
     // Define the scapular joint frame in w.r.t to the Scapula body frame
-    Rotation rotation2(BodyRotationSequence, orientation[0], XAxis, 
-        orientation[1], YAxis, orientation[2], ZAxis);
-    SimTK::Transform jointInScapula(rotation2, location);
-    MobilizedBody::Weld simtkBody2(simtkBody, Transform(), 
-        SimTK::Body::Rigid(mutableThis->updBody().getMassProperties()), 
-        jointInScapula);
+    //Rotation rotation2(BodyRotationSequence, orientation[0], XAxis, 
+    //    orientation[1], YAxis, orientation[2], ZAxis);
+    //SimTK::Transform jointInScapula(rotation2, location);
+    MobilizedBody::Weld mobod(simtkMasslessBody2, Transform(),
+        getChildInternalRigidBody(),
+        getChildFrame().findTransformInBaseFrame());
 
-    setMobilizedBodyIndex(&mutableThis->updBody(), 
-        simtkBody2.getMobilizedBodyIndex());
-
-    // Each coordinate needs to know it's body index and mobility index.
-    const CoordinateSet& coordinateSet = get_CoordinateSet();
-
-    // Link the coordinates for this Joint to the underlying mobilities
-    for(int i =0; i < _numMobilities; ++i){
-        Coordinate &coord = coordinateSet[i];
-        // Translations enabled by Translation mobilizer, first, but appear second in coordinate set
-        setCoordinateMobilizedBodyIndex(&coord, ((i < 3) ?
-            (simtkMasslessBody.getMobilizedBodyIndex()) : 
-                (simtkBody.getMobilizedBodyIndex())));
-        // The mobility index is the same as the order in which the coordinate appears in the coordinate set.
-        setCoordinateMobilizerQIndex(&coord, (i < 3 ? i : i-3));
-    }
-}
-
-void ScapulothoracicJoint::initStateFromProperties(SimTK::State& s) const
-{
-    Super::initStateFromProperties(s);
-}
-
-void ScapulothoracicJoint::setPropertiesFromState(const SimTK::State& state)
-{
-    Super::setPropertiesFromState(state);
+    coordinateIndexForMobility = assignSystemIndicesToBodyAndCoordinates(
+        mobod,
+        &getChildFrame(), 0,
+        coordinateIndexForMobility);
 }

@@ -9,7 +9,7 @@
  * National Institutes of Health (U54 GM072970, R24 HD065690) and by DARPA    *
  * through the Warrior Web program.                                           *
  *                                                                            *
-* Copyright (c) 2005-2015 Stanford University and the Authors                *
+* Copyright (c) 2005-2017 Stanford University and the Authors                *
  * Author(s): Ajay Seth                                                       *
  *                                                                            *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may    *
@@ -24,10 +24,7 @@
  * -------------------------------------------------------------------------- */
 
 // INCLUDE
-#include <string>
-// Header to define plugin (DLL) interface
 #include "osimPluginDLL.h"
-#include <OpenSim/Common/ScaleSet.h>
 #include <OpenSim/Simulation/SimbodyEngine/Joint.h>
 
 namespace OpenSim {
@@ -44,21 +41,15 @@ namespace OpenSim {
  * "winging" axis defined by a point and axis direction in the scapula frame.
  *
  * @author Ajay Seth
- * @version 1
  */
 class OSIMPLUGIN_API ScapulothoracicJoint : public Joint  {
 OpenSim_DECLARE_CONCRETE_OBJECT(ScapulothoracicJoint, Joint);
-
-    static const int _numMobilities = 4;
 
 public:
 //=============================================================================
 // PROPERTIES
 //=============================================================================
-    /** @name Property declarations 
-    The serializable properties associated with a ScapulothoracicJoint.
-    /**@{**/
-    OpenSim_DECLARE_PROPERTY(thoracic_ellipsoid_radii_x_y_z, SimTK::Vec3, 
+    OpenSim_DECLARE_PROPERTY(thoracic_ellipsoid_radii_x_y_z, SimTK::Vec3,
         "Radii of the thoracic surface ellipsoid a Vec3(rX, rY, rZ).");
 
     OpenSim_DECLARE_LIST_PROPERTY_SIZE(scapula_winging_axis_origin, double, 2,
@@ -67,40 +58,98 @@ public:
 
     OpenSim_DECLARE_PROPERTY(scapula_winging_axis_direction, double, 
         "Winging axis orientation (in radians) in the scapula plane.");
-    /**@}**/
+    /** Indices of Coordinates for use as arguments to getCoordinate() and
+    updCoordinate().
 
+    <b>C++ example</b>
+    \code{.cpp}
+    const auto& r1 = scapuloThoracicJoint.getCoordinate(
+                            ScapuloThoracicJoint::Coord::Abduction);
+    \endcode
+    */
+    enum class Coord : unsigned {
+        Abduction,
+        Elevation,
+        UpwardRotation,
+        Winging
+    };
 
+private:
+    /** Specify the Coordinates of the BallJoint. */
+    CoordinateIndex rx{ constructCoordinate(Coordinate::MotionType::Rotational,
+        static_cast<unsigned>(Coord::Abduction)) };
+    CoordinateIndex ry{ constructCoordinate(Coordinate::MotionType::Rotational,
+        static_cast<unsigned>(Coord::Elevation)) };
+    CoordinateIndex rz{ constructCoordinate(Coordinate::MotionType::Rotational,
+        static_cast<unsigned>(Coord::UpwardRotation)) };
+    CoordinateIndex ryp{ constructCoordinate(Coordinate::MotionType::Rotational,
+        static_cast<unsigned>(Coord::Winging)) };
+
+public:
 //=============================================================================
 // METHODS
 //=============================================================================
     // CONSTRUCTION
     /** Default contructor */
     ScapulothoracicJoint();
+    /** Convenience Joint like Constructor */
+    ScapulothoracicJoint(const std::string& name,
+        const PhysicalFrame& parent,
+        const PhysicalFrame& child,
+        const SimTK::Vec3& ellipsoidRadii,
+        SimTK::Vec2 wingingOrigin,
+        double wingingDirection);
+
+    /** Convenience constructor */
+    ScapulothoracicJoint(const std::string& name,
+        const PhysicalFrame& parent,
+        const SimTK::Vec3& locationInParent,
+        const SimTK::Vec3& orientationInParent,
+        const PhysicalFrame& child,
+        const SimTK::Vec3& locationInChild,
+        const SimTK::Vec3& orientationInChild,
+        const SimTK::Vec3& ellipsoidRadii,
+        SimTK::Vec2 wingingOrigin,
+        double wingingDirection);
 
     // default destructor, copy constructor, copy assignment
 
-    /** Convenience constructor */
-    ScapulothoracicJoint(const std::string &name, 
-        OpenSim::Body& parent, SimTK::Vec3 locationInParent, SimTK::Vec3 orientationInParent,
-        OpenSim::Body& body, SimTK::Vec3 locationInBody, SimTK::Vec3 orientationInBody,
-        SimTK::Vec3 ellipsoidRadii, SimTK::Vec2 wingingOrigin, double wingingDirection,
-        bool reverse=false);
+    /** Exposes getCoordinate() method defined in base class (overloaded below).
+    @see Joint */
+    using Joint::getCoordinate;
 
+    /** Exposes updCoordinate() method defined in base class (overloaded below).
+    @see Joint */
+    using Joint::updCoordinate;
+
+    /** Get a const reference to a Coordinate associated with this Joint.
+    @see Coord */
+    const Coordinate& getCoordinate(Coord idx) const {
+        return get_coordinates(static_cast<unsigned>(idx));
+    }
+
+    /** Get a writable reference to a Coordinate associated with this Joint.
+    @see Coord */
+    Coordinate& updCoordinate(Coord idx) {
+        return upd_coordinates(static_cast<unsigned>(idx));
+    }
 
     // SCALE
-    void scale(const ScaleSet& aScaleSet) OVERRIDE_11;
+    void extendScale(const SimTK::State& s, const ScaleSet& scaleSet) override;
 
-    // Model building
-    int numCoordinates() const OVERRIDE_11 {return _numMobilities; };
 
 
 protected:
     /** ModelComponent Interface */
-    void connectToModel(Model& model) OVERRIDE_11;
-    void addToSystem(SimTK::MultibodySystem& system) const OVERRIDE_11;
-    void initStateFromProperties(SimTK::State& s) const OVERRIDE_11;
-    void setPropertiesFromState(const SimTK::State& state) OVERRIDE_11;
+    void extendAddToSystem(SimTK::MultibodySystem& system) const override;
 
+    // Visual support in SimTK visualizer
+/*    void generateDecorations(
+        bool fixed,
+        const ModelDisplayHints&                    hints,
+        const SimTK::State&                         state,
+        SimTK::Array_<SimTK::DecorativeGeometry>&   geometryArray) const override;
+*/
 private:
     void constructProperties();
 
